@@ -103,6 +103,7 @@ export default function BabyPlannerApp() {
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<EditorState>(null);
   const [editingPregnancy, setEditingPregnancy] = useState(false);
+  const [showPersonalSetup, setShowPersonalSetup] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [taskFilter, setTaskFilter] = useState<TaskCategory | "all">("all");
   const [notesDraft, setNotesDraft] = useState("");
@@ -180,7 +181,7 @@ export default function BabyPlannerApp() {
           if (taskError) throw taskError;
         }
       }
-      data.setWorkspace((current) => ({ ...current, pregnancy: next, ...(pregnancy ? {} : { tasks: starterTasks(next.dueDate) }) })); setEditingPregnancy(false); setSection("Inicio");
+      data.setWorkspace((current) => ({ ...current, pregnancy: next, ...(pregnancy ? {} : { tasks: starterTasks(next.dueDate) }) })); setEditingPregnancy(false); setShowPersonalSetup(false); setSection("Inicio");
       await data.reloadActivity(next.id);
     } catch (error) { data.setError(error instanceof Error ? error.message : "No se ha podido guardar la configuración."); }
     finally { setSaving(false); }
@@ -276,13 +277,16 @@ export default function BabyPlannerApp() {
     } catch (error) { data.setError(error instanceof Error ? authMessageFor(error.message) : "No se ha podido eliminar el perfil."); }
     finally { setSaving(false); }
   }
-  async function signOut() { if (supabase) await supabase.auth.signOut(); setUserId(null); setDemo(false); }
+  async function signOut() { if (supabase) await supabase.auth.signOut(); setUserId(null); setDemo(false); setShowPersonalSetup(false); setSection("Inicio"); }
 
   if (supabase && !authReady) return <div className="loading-screen"><span className="brand-mark"><Heart size={19} fill="currentColor" /></span><p>Preparando tu espacio…</p></div>;
   if (supabase && !demo && !userId) return <AuthScreen mode={authMode === "recovery" ? "sign-in" : authMode} setMode={setAuthMode} onSubmit={handleAuth} busy={saving} error={authError} message={authMessage} onDemo={() => { setDemo(true); setAuthError(""); }} />;
   if (supabase && authMode === "recovery" && userId) return <RecoveryPasswordScreen onSubmit={updateRecoveredPassword} busy={saving} error={authError} />;
   if (data.loading) return <div className="loading-screen"><span className="brand-mark"><Heart size={19} fill="currentColor" /></span><p>Cargando tu espacio…</p></div>;
-  if (!pregnancy && !demo && userId) return <FamilyAccessScreen userId={userId} fallback={<SetupScreen pregnancy={pregnancy} history={workspace.ivfHistory} onHistoryChange={(value) => data.setWorkspace((current) => ({ ...current, ivfHistory: value }))} onSave={savePregnancy} busy={saving} demo={demo} />} />;
+  if (!pregnancy && !demo && userId) {
+    if (showPersonalSetup) return <SetupScreen pregnancy={null} history={workspace.ivfHistory} onHistoryChange={(value) => data.setWorkspace((current) => ({ ...current, ivfHistory: value }))} onSave={savePregnancy} onCancel={() => setShowPersonalSetup(false)} cancelText="Volver a las invitaciones" busy={saving} demo={demo} />;
+    return <FamilyAccessScreen userId={userId} onSignOut={() => void signOut()} onCreatePersonalPanel={() => setShowPersonalSetup(true)} fallback={<SetupScreen pregnancy={pregnancy} history={workspace.ivfHistory} onHistoryChange={(value) => data.setWorkspace((current) => ({ ...current, ivfHistory: value }))} onSave={savePregnancy} busy={saving} demo={demo} />} />;
+  }
   if (!pregnancy || editingPregnancy) return <SetupScreen pregnancy={pregnancy} history={workspace.ivfHistory} onHistoryChange={(value) => data.setWorkspace((current) => ({ ...current, ivfHistory: value }))} onSave={savePregnancy} onCancel={pregnancy ? () => setEditingPregnancy(false) : undefined} busy={saving} demo={demo} />;
 
   return <main className="app-shell">
@@ -306,7 +310,7 @@ export default function BabyPlannerApp() {
         {section === "Citas" && <AppointmentsView items={workspace.appointments} onAdd={() => setEditor({ kind: "appointment" })} onEdit={(item) => setEditor({ kind: "appointment", item })} onDelete={(item) => void deleteItem("appointment", item)} />}
         {section === "Compras" && <ShoppingView items={workspace.shopping} onAdd={() => setEditor({ kind: "shopping" })} onEdit={(item) => setEditor({ kind: "shopping", item })} onDelete={(item) => void deleteItem("shopping", item)} onToggle={toggleShopping} />}
         {section === "Fotos" && <PhotoGallery pregnancyId={pregnancy.id} userId={userId} demo={demo} />}
-        {section === "Familia" && userId && <FamilyAccessScreen userId={userId} />}
+        {section === "Familia" && userId && <FamilyAccessScreen userId={userId} onSignOut={() => void signOut()} onReturnToPersonal={() => setSection("Inicio")} />}
         {section === "Notas" && <NotesView value={notesDraft} onChange={setNotesDraft} onSave={() => void saveNote()} busy={saving} demo={demo} />}
         {section === "Historial" && <ClinicalHistoryView events={workspace.events} activity={workspace.activity} demo={demo} onAdd={() => setEditor({ kind: "event" })} onEdit={(item) => setEditor({ kind: "event", item })} onDelete={(item) => void deleteItem("event", item)} />}
         {section === "Datos privados" && <PrivateDetails pregnancy={pregnancy} history={workspace.ivfHistory} demo={demo} busy={saving} onEdit={() => setEditingPregnancy(true)} onExport={exportWorkspace} onDeleteData={() => void deletePregnancyData()} />}
@@ -362,14 +366,14 @@ function RecoveryPasswordScreen({ onSubmit, busy, error }: { onSubmit: (event: F
   return <main className="auth-page"><div className="auth-card"><a className="brand auth-brand" href="#"><span className="brand-mark"><Heart size={18} fill="currentColor"/></span><span>BabyPlanner<span className="brand-dot">.</span></span></a><span className="section-label">RECUPERAR ACCESO</span><h1>Elige una contraseña nueva.</h1><p>Usa al menos 8 caracteres y guárdala en un lugar seguro.</p><form onSubmit={onSubmit}><label>Nueva contraseña<input name="password" type="password" autoComplete="new-password" minLength={8} required placeholder="Al menos 8 caracteres"/></label>{error && <p role="alert" className="form-error">{error}</p>}<button className="primary-button" disabled={busy}>{busy ? "Guardando…" : "Actualizar contraseña"}<ArrowRight size={16}/></button></form></div></main>;
 }
 
-function SetupScreen({ pregnancy, history, onHistoryChange, onSave, onCancel, busy, demo }: { pregnancy: Pregnancy | null; history: string; onHistoryChange: (value: string) => void; onSave: (event: FormEvent<HTMLFormElement>) => void; onCancel?: () => void; busy: boolean; demo: boolean }) {
+function SetupScreen({ pregnancy, history, onHistoryChange, onSave, onCancel, cancelText = "Volver al panel", busy, demo }: { pregnancy: Pregnancy | null; history: string; onHistoryChange: (value: string) => void; onSave: (event: FormEvent<HTMLFormElement>) => void; onCancel?: () => void; cancelText?: string; busy: boolean; demo: boolean }) {
   return <main className="setup-page"><section className="setup-card setup-card-wide"><a className="brand" href="#"><span className="brand-mark"><Heart size={18} fill="currentColor"/></span><span>BabyPlanner<span className="brand-dot">.</span></span></a><div className="setup-illustration"><Leaf size={29}/><Sparkles size={16}/></div><span className="section-label">CONFIGURACIÓN PRIVADA</span><h1>Tu embarazo,<br/>a tu manera.</h1><p className="setup-intro">Añade solo lo que quieras guardar. Las fechas estimadas son orientativas y puedes cambiarlas cuando tu equipo clínico confirme la datación.</p>{demo && <div className="clinical-note"><LockKeyhole size={15}/><span>Estás en una demo sin sesión. No introduzcas datos reales aquí; conecta Supabase e inicia sesión para guardar información privada.</span></div>}<form onSubmit={onSave}><fieldset disabled={demo} className="setup-fields">
     <label>Fecha probable de parto (FPP)<span className="optional-label">Opcional</span><input name="dueDate" type="date" defaultValue={pregnancy?.dueDate ?? ""}/><small className="setup-field-note">Puedes introducir una estimación provisional. Marca la casilla solo cuando la clínica la confirme.</small></label>
     <label className="check-label"><input name="confirmed" type="checkbox" defaultChecked={pregnancy?.dueDateConfirmed ?? false}/><span>La FPP está confirmada por mi equipo sanitario.</span></label>
     <label>¿Embarazo por FIV?<select name="conceptionMethod" defaultValue={pregnancy?.conceptionMethod ?? "unspecified"}><option value="unspecified">Prefiero no indicarlo</option><option value="spontaneous">No</option><option value="ivf">Sí, por FIV</option></select></label>
     <div className="private-form-section"><span className="section-label">DATACIÓN Y DATOS DE CLÍNICA · PRIVADOS</span><div className="form-row"><label>Fecha de transferencia<input name="transferDate" type="date" defaultValue={pregnancy?.transferDate ?? ""}/></label><label>Edad embrionaria en días<input name="embryoAgeDays" type="number" min="0" max="10" defaultValue={pregnancy?.embryoAgeDays ?? ""} placeholder="Opcional"/></label></div><small className="setup-field-note">Si introduces ambos datos, BabyPlanner calcula una estimación editable de FPP. No es una confirmación clínica.</small><div className="form-row"><label>Embriones transferidos<input name="embryosTransferred" type="number" min="1" max="10" defaultValue={pregnancy?.embryosTransferred ?? ""} placeholder="Opcional"/></label><label>Calidad o descripción<input name="embryoQuality" maxLength={40} defaultValue={pregnancy?.embryoQuality ?? ""} placeholder="Opcional"/></label></div><label>Clínica o equipo sanitario<input name="clinicName" maxLength={180} defaultValue={pregnancy?.clinicName ?? ""} placeholder="Opcional"/></label><label>Estado confirmado tras ecografía<select name="sacStatus" defaultValue={pregnancy?.sacStatus ?? "unknown"}><option value="unknown">Pendiente / todavía no se sabe</option><option value="single">Embarazo único confirmado por clínica</option><option value="multiple">Embarazo múltiple confirmado por clínica</option></select></label><small className="setup-field-note">El número de embriones transferidos no determina el número de sacos ni confirma un embarazo múltiple.</small></div>
     <div className="private-form-section"><span className="section-label">HISTORIAL FIV OPCIONAL · PRIVADO</span><label>Notas clínicas o del ciclo<textarea rows={4} maxLength={10000} value={history} onChange={(event) => onHistoryChange(event.target.value)} placeholder="Guarda aquí, si lo deseas, antecedentes o información histórica que quieras conservar."/></label><small className="setup-field-note">Este historial se guarda separado de las notas generales y no aparece en el inicio.</small></div>
-    <div className="clinical-note"><CircleHelp size={15}/><span>BabyPlanner no es un producto médico. La datación y los resultados deben confirmarse con tu equipo sanitario.</span></div><button className="primary-button" disabled={busy || demo}>{busy ? "Guardando…" : pregnancy ? "Guardar cambios" : "Continuar"}<ArrowRight size={16}/></button></fieldset></form>{onCancel && <button className="cancel-link" onClick={onCancel}><ArrowLeft size={15}/> Volver al panel</button>}</section></main>;
+    <div className="clinical-note"><CircleHelp size={15}/><span>BabyPlanner no es un producto médico. La datación y los resultados deben confirmarse con tu equipo sanitario.</span></div><button className="primary-button" disabled={busy || demo}>{busy ? "Guardando…" : pregnancy ? "Guardar cambios" : "Continuar"}<ArrowRight size={16}/></button></fieldset></form>{onCancel && <button className="cancel-link" onClick={onCancel}><ArrowLeft size={15}/> {cancelText}</button>}</section></main>;
 }
 
 function suggestedMilestones(dueDate: string): SuggestedMilestone[] {

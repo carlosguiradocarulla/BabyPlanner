@@ -8,7 +8,7 @@ type PhotoCategory = "bump" | "gifts" | "ideas" | "other";
 type PhotoStage = "first_trimester" | "second_trimester" | "third_trimester";
 type Album = "bump" | "other";
 type Photo = { id: string; category: PhotoCategory; caption: string; createdAt: string; capturedOn: string; pregnancyWeek: number | null; stage: PhotoStage | null; tags: string[]; url: string };
-type Invite = { id: string; invited_email: string; can_view_tracking: boolean; can_manage_shopping: boolean; can_view_photos: boolean; invitation_status: string };
+type Invite = { id: string; invited_email: string; can_view_tracking: boolean; can_manage_shopping: boolean; can_manage_appointments: boolean; can_view_photos: boolean; invitation_status: string };
 
 const categories: { value: PhotoCategory; label: string }[] = [
   { value: "bump", label: "Fotos de la barriga" },
@@ -46,7 +46,7 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
 
   const loadInvites = useCallback(async () => {
     if (!supabase || demo || !userId || !manageInvites) return;
-    const { data, error: queryError } = await supabase.from("pregnancy_collaborators").select("id,invited_email,can_view_tracking,can_manage_shopping,can_view_photos,invitation_status").eq("pregnancy_id", pregnancyId).eq("owner_id", userId).order("created_at", { ascending: false });
+    const { data, error: queryError } = await supabase.from("pregnancy_collaborators").select("id,invited_email,can_view_tracking,can_manage_shopping,can_manage_appointments,can_view_photos,invitation_status").eq("pregnancy_id", pregnancyId).eq("owner_id", userId).order("created_at", { ascending: false });
     if (queryError) { setError("No se han podido cargar los accesos compartidos."); return; }
     setInvites((data ?? []) as Invite[]);
   }, [pregnancyId, userId, demo, manageInvites]);
@@ -108,7 +108,7 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
     const email = String(form.get("email") ?? "").trim().toLowerCase();
     if (!email || email.length > 320) { setError("Escribe un correo válido para la invitación."); return; }
     setBusy(true);
-    const { error: insertError } = await supabase.from("pregnancy_collaborators").insert({ pregnancy_id: pregnancyId, owner_id: userId, invited_email: email, can_view_tracking: form.get("tracking") === "on", can_manage_shopping: form.get("shopping") === "on", can_view_photos: form.get("photos") === "on", invitation_status: "pending" });
+    const { error: insertError } = await supabase.from("pregnancy_collaborators").insert({ pregnancy_id: pregnancyId, owner_id: userId, invited_email: email, can_view_tracking: form.get("tracking") === "on", can_manage_shopping: form.get("shopping") === "on", can_manage_appointments: form.get("appointments") === "on", can_view_photos: form.get("photos") === "on", invitation_status: "pending" });
     if (insertError) setError("No se ha podido guardar la invitación. Revisa que la migración esté aplicada y que el correo sea distinto al de tu cuenta.");
     else { setMessage("Invitación preparada. La otra persona debe crear una cuenta con ese correo e iniciar sesión para aceptarla. La app todavía no envía correos automáticamente."); (document.querySelector("#family-invite-form") as HTMLFormElement | null)?.reset(); await loadInvites(); }
     setBusy(false);
@@ -119,6 +119,15 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
     setError("");
     const { error: deleteError } = await supabase.from("pregnancy_collaborators").delete().eq("id", invite.id).eq("owner_id", userId);
     if (deleteError) setError("No se ha podido revocar el acceso."); else { setMessage("Acceso revocado."); await loadInvites(); }
+  }
+
+  async function toggleAppointmentAccess(invite: Invite) {
+    if (!supabase || !userId || !window.confirm(`${invite.can_manage_appointments ? "Retirar" : "Dar"} permiso para gestionar citas a ${invite.invited_email}?`)) return;
+    setError(""); setMessage(""); setBusy(true);
+    const { error: updateError } = await supabase.from("pregnancy_collaborators").update({ can_manage_appointments: !invite.can_manage_appointments }).eq("id", invite.id).eq("owner_id", userId);
+    if (updateError) setError("No se ha podido cambiar el permiso de citas. Comprueba que la migración esté aplicada.");
+    else { setMessage("Permiso de citas actualizado."); await loadInvites(); }
+    setBusy(false);
   }
 
   return <div className="content-stack">
@@ -144,12 +153,12 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
       <div className="list-page-heading"><div><span className="section-label">COMPARTIR CON CUIDADO</span><h2>Invitar a alguien</h2><p>Cada persona usa su propia cuenta. Puedes limitar el acceso y revocarlo cuando quieras.</p></div><Users size={19}/></div>
       {!demo && <form id="family-invite-form" className="family-invite-form" action={inviteFamily}>
         <label>Correo de la persona<input name="email" type="email" required maxLength={320} placeholder="familia@ejemplo.es" /></label>
-        <div className="share-permissions"><label><input type="checkbox" name="tracking" defaultChecked/> Ver seguimiento</label><label><input type="checkbox" name="shopping"/> Añadir y editar compras</label><label><input type="checkbox" name="photos"/> Ver y subir fotos</label></div>
+        <div className="share-permissions"><label><input type="checkbox" name="tracking" defaultChecked/> Ver seguimiento</label><label><input type="checkbox" name="appointments"/> Ver, añadir, editar y eliminar citas</label><label><input type="checkbox" name="shopping"/> Añadir y editar compras</label><label><input type="checkbox" name="photos"/> Ver y subir fotos</label></div>
         <button className="primary-button compact-button" disabled={busy}><Users size={15}/> Preparar invitación</button>
       </form>}
       {invites.length > 0 && <div className="invite-list">{invites.map((invite) => <div className="invite-row" key={invite.id}><div><strong>{invite.invited_email}</strong><small>{invite.invitation_status === "accepted" ? "Acceso aceptado" : invite.invitation_status === "revoked" ? "Revocada" : "Pendiente de aceptación"} · {[
-        invite.can_view_tracking && "seguimiento", invite.can_manage_shopping && "compras", invite.can_view_photos && "fotos",
-      ].filter(Boolean).join(", ") || "sin permisos"}</small></div><button type="button" className="outline-button" onClick={() => void revokeInvite(invite)}>Revocar</button></div>)}</div>}
+        invite.can_view_tracking && "seguimiento", invite.can_manage_appointments && "citas", invite.can_manage_shopping && "compras", invite.can_view_photos && "fotos",
+      ].filter(Boolean).join(", ") || "sin permisos"}</small><button type="button" className="text-link invite-permission-toggle" disabled={busy || invite.invitation_status === "revoked"} onClick={() => void toggleAppointmentAccess(invite)}>{invite.can_manage_appointments ? "Retirar permiso de citas" : "Permitir gestionar citas"}</button></div><button type="button" className="outline-button" disabled={busy} onClick={() => void revokeInvite(invite)}>Revocar</button></div>)}</div>}
       <p className="gallery-footnote">La invitación no concede acceso a citas, notas privadas ni historial de FIV. No se envía un correo desde esta versión.</p>
     </section>}
   </div>;
