@@ -108,7 +108,7 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
     const email = String(form.get("email") ?? "").trim().toLowerCase();
     if (!email || email.length > 320) { setError("Escribe un correo válido para la invitación."); return; }
     setBusy(true);
-    const { error: insertError } = await supabase.from("pregnancy_collaborators").insert({ pregnancy_id: pregnancyId, owner_id: userId, invited_email: email, can_view_tracking: form.get("tracking") === "on", can_manage_shopping: form.get("shopping") === "on", can_manage_appointments: form.get("appointments") === "on", can_view_photos: form.get("photos") === "on", invitation_status: "pending" });
+    const { error: insertError } = await supabase.from("pregnancy_collaborators").insert({ pregnancy_id: pregnancyId, owner_id: userId, invited_email: email, can_view_tracking: true, can_manage_shopping: form.get("shopping") === "on", can_manage_appointments: form.get("appointments") === "on", can_view_photos: form.get("photos") === "on", invitation_status: "pending" });
     if (insertError) setError("No se ha podido guardar la invitación. Revisa que la migración esté aplicada y que el correo sea distinto al de tu cuenta.");
     else { setMessage("Invitación preparada. La otra persona debe crear una cuenta con ese correo e iniciar sesión para aceptarla. La app todavía no envía correos automáticamente."); (document.querySelector("#family-invite-form") as HTMLFormElement | null)?.reset(); await loadInvites(); }
     setBusy(false);
@@ -153,13 +153,13 @@ export function PhotoGallery({ pregnancyId, userId, ownerId = userId, demo, mana
       <div className="list-page-heading"><div><span className="section-label">COMPARTIR CON CUIDADO</span><h2>Invitar a alguien</h2><p>Cada persona usa su propia cuenta. Puedes limitar el acceso y revocarlo cuando quieras.</p></div><Users size={19}/></div>
       {!demo && <form id="family-invite-form" className="family-invite-form" action={inviteFamily}>
         <label>Correo de la persona<input name="email" type="email" required maxLength={320} placeholder="familia@ejemplo.es" /></label>
-        <div className="share-permissions"><label><input type="checkbox" name="tracking" defaultChecked/> Ver seguimiento</label><label><input type="checkbox" name="appointments"/> Ver, añadir, editar y eliminar citas</label><label><input type="checkbox" name="shopping"/> Añadir y editar compras</label><label><input type="checkbox" name="photos"/> Ver y subir fotos</label></div>
+        <p className="family-baseline-note">Toda invitación incluye Inicio y el seguimiento semanal completo. Puedes escoger los permisos adicionales:</p><div className="share-permissions"><label><input type="checkbox" name="appointments"/> Ver, añadir, editar y eliminar citas</label><label><input type="checkbox" name="shopping"/> Añadir y editar compras</label><label><input type="checkbox" name="photos"/> Ver y subir fotos</label></div>
         <button className="primary-button compact-button" disabled={busy}><Users size={15}/> Preparar invitación</button>
       </form>}
       {invites.length > 0 && <div className="invite-list">{invites.map((invite) => <div className="invite-row" key={invite.id}><div><strong>{invite.invited_email}</strong><small>{invite.invitation_status === "accepted" ? "Acceso aceptado" : invite.invitation_status === "revoked" ? "Revocada" : "Pendiente de aceptación"} · {[
-        invite.can_view_tracking && "seguimiento", invite.can_manage_appointments && "citas", invite.can_manage_shopping && "compras", invite.can_view_photos && "fotos",
-      ].filter(Boolean).join(", ") || "sin permisos"}</small><button type="button" className="text-link invite-permission-toggle" disabled={busy || invite.invitation_status === "revoked"} onClick={() => void toggleAppointmentAccess(invite)}>{invite.can_manage_appointments ? "Retirar permiso de citas" : "Permitir gestionar citas"}</button></div><button type="button" className="outline-button" disabled={busy} onClick={() => void revokeInvite(invite)}>Revocar</button></div>)}</div>}
-      <p className="gallery-footnote">La invitación no concede acceso a citas, notas privadas ni historial de FIV. No se envía un correo desde esta versión.</p>
+        "seguimiento", invite.can_manage_appointments && "citas", invite.can_manage_shopping && "compras", invite.can_view_photos && "fotos",
+      ].filter(Boolean).join(", ")}</small><button type="button" className="text-link invite-permission-toggle" disabled={busy || invite.invitation_status === "revoked"} onClick={() => void toggleAppointmentAccess(invite)}>{invite.can_manage_appointments ? "Retirar permiso de citas" : "Permitir gestionar citas"}</button></div><button type="button" className="outline-button" disabled={busy} onClick={() => void revokeInvite(invite)}>Revocar</button></div>)}</div>}
+      <p className="gallery-footnote">Toda invitación incluye Inicio y seguimiento. Citas, compras y fotos dependen de los permisos elegidos. Las notas privadas y el historial de FIV no se comparten. No se envía un correo desde esta versión.</p>
     </section>}
   </div>;
 }
