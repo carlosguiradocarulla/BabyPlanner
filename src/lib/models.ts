@@ -1,4 +1,4 @@
-export type Section = "Inicio" | "Seguimiento" | "Tareas" | "Citas" | "Compras" | "Notas" | "Historial" | "Datos privados";
+export type Section = "Inicio" | "Seguimiento" | "Tareas" | "Citas" | "Compras" | "Fotos" | "Familia" | "Notas" | "Historial" | "Datos privados";
 export type ConceptionMethod = "unspecified" | "spontaneous" | "ivf";
 export type AppointmentCertainty = "confirmed" | "orientative" | "pending_confirmation";
 export type ClinicalEventType = "transfer" | "home_test" | "lab_result" | "ultrasound" | "symptom_note" | "clinic_instruction" | "other";
